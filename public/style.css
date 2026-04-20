@@ -1384,3 +1384,43 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   /* Messages wider */
   .message-row { max-width: 68%; }
 }
+/* ══════════════════════════════════════════════════════
+   MOBILE NAV FIX (< 640px)
+══════════════════════════════════════════════════════ */
+@media (max-width: 639px) {
+  .land-nav {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .land-nav-links {
+    display: none;
+  }
+
+  .land-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  .land-search-wrap {
+    position: static;
+  }
+
+  .land-search-box {
+    right: auto;
+    left: 38px;
+    width: 0;
+  }
+
+  .land-search-box.open {
+    width: 150px;
+  }
+
+  .land-nav-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+}
