@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#07090f"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>LUMIÈRE — Women's Fashion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500&family=Oxanium:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     LANDING PAGE — LUMIÈRE FASHION
+══════════════════════════════════════════════════════ -->
+<div id="landing-screen" class="screen active">
+
+  <!-- NAV -->
+  <nav class="land-nav">
+    <div class="land-nav-logo">LUMIÈRE</div>
+    <div class="land-nav-links">
+      <a href="#">New In</a>
+      <a href="#">Dresses</a>
+      <a href="#">Collections</a>
+      <a href="#">Sale</a>
+    </div>
+    <div class="land-nav-actions">
+      <!-- Search bar — type "0322" to secretly open chat -->
+      <div class="land-search-wrap">
+        <button class="land-nav-icon" id="search-toggle-btn" title="Search">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.8"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+        <div class="land-search-box" id="land-search-box">
+          <input id="land-search-input" type="text" placeholder="Search styles..." autocomplete="off" spellcheck="false"/>
+          <span class="search-hint" id="search-hint"></span>
+        </div>
+      </div>
+      <button class="land-nav-icon" title="Wishlist">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button class="land-nav-icon" title="Bag">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" stroke="currentColor" stroke-width="1.8"/><line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="1.8"/><path d="M16 10a4 4 0 0 1-8 0" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="land-hero">
+    <div class="land-hero-bg">
+      <div class="hero-blob hero-blob-1"></div>
+      <div class="hero-blob hero-blob-2"></div>
+      <div class="hero-blob hero-blob-3"></div>
+      <div class="hero-grain"></div>
+    </div>
+
+    <div class="land-hero-content">
+      <div class="land-hero-left">
+        <p class="land-season">SS 2025 Collection</p>
+        <h1 class="land-hero-title">Dressed<br/><em>for Every</em><br/>Chapter</h1>
+        <p class="land-hero-sub">Discover silhouettes that speak to the woman you are — and the one you're becoming.</p>
+        <div class="land-hero-btns">
+          <button class="land-btn-primary">Shop The Edit</button>
+          <button class="land-btn-outline">View Lookbook</button>
+        </div>
+        <div class="land-hero-stats">
+          <div class="stat"><span class="stat-num">240+</span><span class="stat-label">Styles</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><span class="stat-num">Free</span><span class="stat-label">Returns</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><span class="stat-num">4.9★</span><span class="stat-label">Rated</span></div>
+        </div>
+      </div>
+
+      <div class="land-hero-right">
+        <div class="dress-showcase">
+          <div class="dress-card dress-card-1">
+            <div class="dress-figure"><div class="dress-body d1"></div><div class="dress-skirt d1s"></div></div>
+            <div class="dress-tag">Floral Midi<br/><span>₹4,299</span></div>
+          </div>
+          <div class="dress-card dress-card-2 featured">
+            <div class="dress-badge">Bestseller</div>
+            <div class="dress-figure large"><div class="dress-body d2"></div><div class="dress-skirt d2s"></div></div>
+            <div class="dress-tag">Evening Gown<br/><span>₹8,999</span></div>
+          </div>
+          <div class="dress-card dress-card-3">
+            <div class="dress-figure"><div class="dress-body d3"></div><div class="dress-skirt d3s"></div></div>
+            <div class="dress-tag">Wrap Dress<br/><span>₹3,499</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Marquee -->
+    <div class="land-marquee">
+      <div class="marquee-track">
+        <span>Free shipping on orders over ₹2000</span><span class="mx">✦</span>
+        <span>New arrivals every Friday</span><span class="mx">✦</span>
+        <span>Easy 30-day returns</span><span class="mx">✦</span>
+        <span>Sustainable fabrics · Ethical production</span><span class="mx">✦</span>
+        <span>Free shipping on orders over ₹2000</span><span class="mx">✦</span>
+        <span>New arrivals every Friday</span><span class="mx">✦</span>
+        <span>Easy 30-day returns</span><span class="mx">✦</span>
+        <span>Sustainable fabrics · Ethical production</span><span class="mx">✦</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRODUCTS -->
+  <section class="land-products">
+    <div class="land-section-header">
+      <h2>Trending Now</h2>
+      <a href="#" class="view-all">View All →</a>
+    </div>
+    <div class="products-scroll">
+      <div class="product-item"><div class="product-img pi-1"><div class="pi-dress"></div></div><div class="product-info"><div class="product-name">Dahlia Slip Dress</div><div class="product-price">₹3,999</div></div></div>
+      <div class="product-item"><div class="product-img pi-2"><div class="pi-dress"></div></div><div class="product-info"><div class="product-name">Noir Maxi Dress</div><div class="product-price">₹5,499</div></div></div>
+      <div class="product-item"><div class="product-img pi-3"><div class="pi-dress"></div></div><div class="product-info"><div class="product-name">Blush Sundress</div><div class="product-price">₹2,799</div></div></div>
+      <div class="product-item"><div class="product-img pi-4"><div class="pi-dress"></div></div><div class="product-info"><div class="product-name">Sage Linen Dress</div><div class="product-price">₹4,199</div></div></div>
+      <div class="product-item"><div class="product-img pi-5"><div class="pi-dress"></div></div><div class="product-info"><div class="product-name">Onyx Evening Gown</div><div class="product-price">₹9,999</div></div></div>
+    </div>
+  </section>
+
+  <!-- INVISIBLE FLOATING BUTTON — only appears on scroll -->
+  <button class="securelink-float-btn" id="open-securelink-btn">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span>SecureLink</span>
+  </button>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     LOGIN SCREEN
+══════════════════════════════════════════════════════ -->
+<div id="login-screen" class="screen">
+  <div class="login-bg">
+    <div class="grid-overlay"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 40 40" fill="none"><rect x="8" y="18" width="24" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M13 18V13a7 7 0 0 1 14 0v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="20" cy="26" r="2.5" fill="currentColor"/><line x1="20" y1="28.5" x2="20" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <span class="logo-text">SecureLink</span>
+    </div>
+    <p class="login-tagline">End-to-end encrypted · 2-person only · No logs</p>
+    <div class="login-form">
+      <div class="input-group">
+        <label for="username-input">YOUR HANDLE</label>
+        <input id="username-input" type="text" placeholder="Enter username..." maxlength="24" autocomplete="off" spellcheck="false"/>
+      </div>
+      <button id="join-btn" class="btn-primary" disabled>
+        <span class="btn-text">Initialize Session</span>
+        <span class="btn-loader hidden"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>
+      </button>
+      <p id="room-full-msg" class="error-msg hidden">⚠ Room is at capacity (2/2). Try again later.</p>
+    </div>
+    <div class="login-footer">
+      <div class="badge"><span class="badge-dot"></span>AES-GCM · ECDH · DTLS-SRTP</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     CHAT SCREEN
+══════════════════════════════════════════════════════ -->
+<div id="chat-screen" class="screen">
+
+  <!-- Mobile top bar -->
+  <div class="mobile-topbar" id="mobile-topbar">
+    <button class="mobile-back-btn" id="mobile-back-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="mobile-peer-info">
+      <div class="mobile-peer-avatar" id="mobile-peer-avatar">?</div>
+      <div>
+        <div class="mobile-peer-name" id="mobile-peer-name">Waiting...</div>
+        <div class="mobile-peer-status" id="mobile-peer-status">
+          <span class="status-dot offline" id="mobile-status-dot"></span>
+          <span id="mobile-status-text">Waiting for peer</span>
+        </div>
+      </div>
+    </div>
+    <div class="mobile-call-btns">
+      <button class="mobile-call-icon" id="m-voice-btn" disabled title="Voice">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.36 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.27 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button class="mobile-call-icon" id="m-video-btn" disabled title="Video">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Sidebar (desktop) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-small">
+        <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        SecureLink
+      </div>
+    </div>
+
+    <div class="peer-card">
+      <div class="peer-avatar" id="peer-avatar">?</div>
+      <div class="peer-info">
+        <div class="peer-name" id="peer-name">Waiting...</div>
+        <div class="peer-status">
+          <span class="status-dot offline" id="sidebar-status-dot"></span>
+          <span id="status-text">Waiting for peer</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="my-info">
+      <div class="my-avatar" id="my-avatar">?</div>
+      <div>
+        <div class="my-name" id="my-name">You</div>
+        <div class="key-indicator" id="key-indicator">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Key pending...
+        </div>
+      </div>
+    </div>
+
+    <div class="call-controls">
+      <button class="call-btn" id="voice-call-btn" title="Voice Call" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.36 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.27 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button class="call-btn" id="video-call-btn" title="Video Call" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
+      </button>
+      <button class="call-btn" id="screen-share-btn" title="Share Screen" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Chat Area -->
+  <main class="chat-area">
+    <div class="chat-header">
+      <div class="chat-header-info">
+        <div class="encryption-badge">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect x="4" y="11" width="16" height="10" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          E2E Encrypted
+        </div>
+        <span id="session-info" class="session-info">Session active</span>
+      </div>
+      <div id="room-count" class="room-count">1/2 online</div>
+    </div>
+
+    <div class="messages-container" id="messages">
+      <div class="system-msg">
+        <div class="system-msg-inner">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          Waiting for peer to connect. Share the server URL.
+        </div>
+      </div>
+    </div>
+
+    <div class="typing-area" id="typing-area" style="display:none">
+      <div class="typing-indicator">
+        <span class="typing-name" id="typing-name">Peer</span> is typing
+        <span class="typing-dots"><span></span><span></span><span></span></span>
+      </div>
+    </div>
+
+    <!-- Emoji Picker -->
+    <div class="emoji-picker" id="emoji-picker" style="display:none">
+      <div class="emoji-cats" id="emoji-cats"></div>
+      <div class="emoji-grid" id="emoji-grid"></div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="input-wrapper">
+        <button class="emoji-toggle-btn" id="emoji-btn" disabled title="Emoji">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M8 14s1.5 2 4 2 4-2 4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="9" x2="9.01" y2="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><line x1="15" y1="9" x2="15.01" y2="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </button>
+        <textarea id="message-input" placeholder="Type a message... (end-to-end encrypted)" rows="1" maxlength="2000" disabled></textarea>
+        <button id="send-btn" class="send-btn" disabled>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><line x1="22" y1="2" x2="11" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><polygon points="22 2 15 22 11 13 2 9 22 2" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     VIDEO / VOICE CALL OVERLAY
+══════════════════════════════════════════════════════ -->
+<div id="call-overlay" class="call-overlay hidden">
+  <video id="remote-video" autoplay playsinline></video>
+
+  <!-- Local PiP -->
+  <div class="local-pip" id="local-pip">
+    <video id="local-video" autoplay playsinline muted></video>
+    <div class="screen-share-indicator hidden" id="screen-share-indicator">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Sharing screen
+    </div>
+  </div>
+
+  <!-- Info bar -->
+  <div class="call-info-bar">
+    <span id="call-peer-name">Peer</span>
+    <span id="call-duration" class="call-timer">00:00</span>
+    <div class="call-type-badge" id="call-type-badge">VIDEO</div>
+  </div>
+
+  <!-- Call actions -->
+  <div class="call-actions">
+    <button class="action-btn" id="toggle-mute" title="Mute mic">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" stroke="currentColor" stroke-width="2"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="action-btn" id="toggle-speaker" title="Speaker">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="action-btn danger" id="end-call-btn" title="End Call">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.36 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.27 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="2"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <button class="action-btn" id="toggle-camera" title="Camera">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     INCOMING CALL MODAL
+══════════════════════════════════════════════════════ -->
+<div id="call-modal" class="call-modal hidden">
+  <div class="call-modal-inner">
+    <div class="caller-ring">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="caller-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.36 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.27 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke="currentColor" stroke-width="1.5"/></svg>
+      </div>
+    </div>
+    <p id="call-from-name" class="caller-name">Peer</p>
+    <p id="call-type-text" class="call-type-label">Incoming video call</p>
+    <div class="call-modal-actions">
+      <button id="reject-call-btn" class="modal-btn reject">Decline</button>
+      <button id="accept-call-btn" class="modal-btn accept">Accept</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
