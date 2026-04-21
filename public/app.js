@@ -948,4 +948,3 @@ function escapeHtml(str) {
 /* ── INIT ───────────────────────────────────────────────── */
 initEmojiPicker();
 console.log('%c🔒 SecureLink', 'font-size:18px;font-weight:bold;color:#00e5cc');
-console.log('%c[secret: search 0322]', 'color:#4a5578;font-size:10px');
