@@ -120,6 +120,24 @@ const DOM = {
   fileInput:      $('file-input'),
 };
 
+/* ── BASE64 HELPERS (chunked — safe for large files) ────── */
+function uint8ToBase64(bytes) {
+  // Process in 8KB chunks to avoid call-stack overflow on large buffers
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8(b64) {
+  const binary = atob(b64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 /* ── CRYPTO ─────────────────────────────────────────────── */
 const Crypto = {
   async generateKeyPair() {
@@ -127,11 +145,10 @@ const Crypto = {
   },
   async exportPublicKey(key) {
     const raw = await crypto.subtle.exportKey('raw', key);
-    return btoa(String.fromCharCode(...new Uint8Array(raw)));
+    return uint8ToBase64(new Uint8Array(raw));
   },
   async importPublicKey(b64) {
-    const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    return crypto.subtle.importKey('raw', raw, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+    return crypto.subtle.importKey('raw', base64ToUint8(b64), { name: 'ECDH', namedCurve: 'P-256' }, true, []);
   },
   async deriveSharedKey(myPriv, peerPub) {
     const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: peerPub }, myPriv, 256);
@@ -146,13 +163,13 @@ const Crypto = {
   async encrypt(key, text) {
     const iv  = crypto.getRandomValues(new Uint8Array(12));
     const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));
-    return { encrypted: btoa(String.fromCharCode(...new Uint8Array(enc))), iv: btoa(String.fromCharCode(...iv)) };
+    return { encrypted: uint8ToBase64(new Uint8Array(enc)), iv: uint8ToBase64(iv) };
   },
   async decrypt(key, encrypted, iv) {
     const dec = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: Uint8Array.from(atob(iv), c => c.charCodeAt(0)) },
+      { name: 'AES-GCM', iv: base64ToUint8(iv) },
       key,
-      Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
+      base64ToUint8(encrypted)
     );
     return new TextDecoder().decode(dec);
   }
@@ -688,8 +705,8 @@ DOM.fileInput.addEventListener('change', async () => {
   const file = DOM.fileInput.files[0];
   if (!file || !state.sharedKey) return;
 
-  if (file.size > 10 * 1024 * 1024) {
-    UI.toast('Max file size is 10MB', 'error');
+  if (file.size > 20 * 1024 * 1024) {
+    UI.toast('Max file size is 20MB', 'error');
     DOM.fileInput.value = '';
     return;
   }
@@ -702,46 +719,64 @@ DOM.fileInput.addEventListener('change', async () => {
     return;
   }
 
-  // Show "sending..." placeholder
+  // Show sending placeholder
   const placeholderRow = document.createElement('div');
   placeholderRow.className = 'message-row mine';
   placeholderRow.innerHTML = `<div class="file-sending"><span class="typing-dots"><span></span><span></span><span></span></span> Encrypting & sending...</div>`;
   DOM.messages.appendChild(placeholderRow);
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
 
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const base64 = reader.result;
-      const { encrypted, iv } = await Crypto.encrypt(state.sharedKey, base64);
+  try {
+    // Read as raw ArrayBuffer — encrypt BINARY not DataURL string
+    const arrayBuffer = await file.arrayBuffer();
+    const fileBytes   = new Uint8Array(arrayBuffer);
 
-      state.socket.emit('file-message', {
-        fileData: encrypted,
-        iv,
-        fileName: file.name,
-        fileType: file.type,
-        viewOnce: true  // all images/videos are view-once for receiver
-      });
+    const iv  = crypto.getRandomValues(new Uint8Array(12));
+    const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, state.sharedKey, fileBytes);
 
-      // Replace placeholder with actual preview for sender
-      placeholderRow.remove();
-      addFileMessage(base64, file.name, file.type, true);
-      DOM.fileInput.value = '';
-    } catch (err) {
-      placeholderRow.remove();
-      UI.toast('Failed to encrypt file', 'error');
-    }
-  };
-  reader.onerror = () => { placeholderRow.remove(); UI.toast('Failed to read file', 'error'); };
-  reader.readAsDataURL(file);
+    const encB64 = uint8ToBase64(new Uint8Array(enc));
+    const ivB64  = uint8ToBase64(iv);
+
+    state.socket.emit('file-message', {
+      fileData:  encB64,
+      iv:        ivB64,
+      fileName:  file.name,
+      fileType:  file.type,
+      viewOnce:  true
+    });
+
+    // Show preview for sender using local object URL (no re-encode needed)
+    const objectUrl = URL.createObjectURL(file);
+    placeholderRow.remove();
+    addFileMessage(objectUrl, file.name, file.type, true, false);
+    DOM.fileInput.value = '';
+
+  } catch (err) {
+    console.error('[File send error]', err);
+    placeholderRow.remove();
+    UI.toast(`Send failed: ${err.message || err}`, 'error');
+  }
 });
 
 // Receive file from peer
 function handleIncomingFile({ fileData, iv, fileName, fileType, viewOnce, from, timestamp }) {
   if (!state.sharedKey) return;
-  Crypto.decrypt(state.sharedKey, fileData, iv)
-    .then(base64 => addFileMessage(base64, fileName, fileType, false, viewOnce, from, timestamp))
-    .catch(() => UI.addMessage('[Could not decrypt file]', 'system'));
+
+  crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToUint8(iv) },
+    state.sharedKey,
+    base64ToUint8(fileData)
+  )
+  .then(decrypted => {
+    // Rebuild blob from raw bytes — no double-encode
+    const blob      = new Blob([decrypted], { type: fileType });
+    const objectUrl = URL.createObjectURL(blob);
+    addFileMessage(objectUrl, fileName, fileType, false, viewOnce, from, timestamp);
+  })
+  .catch(err => {
+    console.error('[File decrypt error]', err);
+    UI.addMessage('[Could not decrypt file]', 'system');
+  });
 }
 
 function addFileMessage(dataUrl, fileName, fileType, isMine, viewOnce = false, from = '', timestamp = Date.now()) {

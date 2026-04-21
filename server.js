@@ -6,7 +6,10 @@ const nodemailer = require('nodemailer');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+const io     = new Server(server, {
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+  maxHttpBufferSize: 50 * 1024 * 1024  // 50MB — required for image/video file transfer
+});
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
