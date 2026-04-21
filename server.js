@@ -112,6 +112,12 @@ io.on('connection', (socket) => {
     if (me && other) io.to(other.id).emit('chat-message', { encrypted, iv, from: me.username, fromId: socket.id, timestamp: Date.now() });
   });
 
+  socket.on('file-message', ({ fileData, iv, fileName, fileType, viewOnce }) => {
+    const me    = users.find(u => u.id === socket.id);
+    const other = users.find(u => u.id !== socket.id);
+    if (me && other) io.to(other.id).emit('file-message', { fileData, iv, fileName, fileType, viewOnce, from: me.username, timestamp: Date.now() });
+  });
+
   socket.on('typing', ({ isTyping }) => {
     const me    = users.find(u => u.id === socket.id);
     const other = users.find(u => u.id !== socket.id);

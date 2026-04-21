@@ -116,6 +116,8 @@ const DOM = {
   emojiPicker:    $('emoji-picker'),
   emojiGrid:      $('emoji-grid'),
   emojiCats:      $('emoji-cats'),
+  attachBtn:      $('attach-btn'),
+  fileInput:      $('file-input'),
 };
 
 /* ── CRYPTO ─────────────────────────────────────────────── */
@@ -254,6 +256,7 @@ const UI = {
     DOM.messageInput.disabled = false;
     DOM.sendBtn.disabled = false;
     DOM.emojiBtn.disabled = false;
+    DOM.attachBtn.disabled = false;
     [DOM.voiceCallBtn, DOM.videoCallBtn, DOM.screenShareBtn, DOM.mVoiceBtn, DOM.mVideoBtn].forEach(b => { if (b) b.disabled = false; });
   },
 
@@ -269,6 +272,7 @@ const UI = {
     DOM.messageInput.disabled = true;
     DOM.sendBtn.disabled = true;
     DOM.emojiBtn.disabled = true;
+    DOM.attachBtn.disabled = true;
     [DOM.voiceCallBtn, DOM.videoCallBtn, DOM.screenShareBtn, DOM.mVoiceBtn, DOM.mVideoBtn].forEach(b => { if (b) b.disabled = true; });
     state.sharedKey = null;
     if (DOM.keyIndicator) { DOM.keyIndicator.textContent = 'Key pending...'; DOM.keyIndicator.classList.remove('established'); }
@@ -524,6 +528,8 @@ async function initSocket() {
     }
   });
 
+  state.socket.on('file-message', (payload) => handleIncomingFile(payload));
+
   state.socket.on('typing', ({ username, isTyping }) => {
     DOM.typingArea.style.display = isTyping ? 'block' : 'none';
     DOM.typingName.textContent = username;
@@ -674,6 +680,158 @@ DOM.toggleCamera.addEventListener('click', () => {
   DOM.toggleCamera.classList.toggle('active', state.isCameraOff);
   DOM.toggleCamera.title = state.isCameraOff ? 'Show camera' : 'Hide camera';
 });
+
+/* ── FILE TRANSFER ──────────────────────────────────────── */
+DOM.attachBtn.addEventListener('click', () => DOM.fileInput.click());
+
+DOM.fileInput.addEventListener('change', async () => {
+  const file = DOM.fileInput.files[0];
+  if (!file || !state.sharedKey) return;
+
+  if (file.size > 10 * 1024 * 1024) {
+    UI.toast('Max file size is 10MB', 'error');
+    DOM.fileInput.value = '';
+    return;
+  }
+
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
+  if (!isImage && !isVideo) {
+    UI.toast('Only images and videos allowed', 'error');
+    DOM.fileInput.value = '';
+    return;
+  }
+
+  // Show "sending..." placeholder
+  const placeholderRow = document.createElement('div');
+  placeholderRow.className = 'message-row mine';
+  placeholderRow.innerHTML = `<div class="file-sending"><span class="typing-dots"><span></span><span></span><span></span></span> Encrypting & sending...</div>`;
+  DOM.messages.appendChild(placeholderRow);
+  DOM.messages.scrollTop = DOM.messages.scrollHeight;
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const base64 = reader.result;
+      const { encrypted, iv } = await Crypto.encrypt(state.sharedKey, base64);
+
+      state.socket.emit('file-message', {
+        fileData: encrypted,
+        iv,
+        fileName: file.name,
+        fileType: file.type,
+        viewOnce: true  // all images/videos are view-once for receiver
+      });
+
+      // Replace placeholder with actual preview for sender
+      placeholderRow.remove();
+      addFileMessage(base64, file.name, file.type, true);
+      DOM.fileInput.value = '';
+    } catch (err) {
+      placeholderRow.remove();
+      UI.toast('Failed to encrypt file', 'error');
+    }
+  };
+  reader.onerror = () => { placeholderRow.remove(); UI.toast('Failed to read file', 'error'); };
+  reader.readAsDataURL(file);
+});
+
+// Receive file from peer
+function handleIncomingFile({ fileData, iv, fileName, fileType, viewOnce, from, timestamp }) {
+  if (!state.sharedKey) return;
+  Crypto.decrypt(state.sharedKey, fileData, iv)
+    .then(base64 => addFileMessage(base64, fileName, fileType, false, viewOnce, from, timestamp))
+    .catch(() => UI.addMessage('[Could not decrypt file]', 'system'));
+}
+
+function addFileMessage(dataUrl, fileName, fileType, isMine, viewOnce = false, from = '', timestamp = Date.now()) {
+  const row  = document.createElement('div');
+  row.className = `message-row ${isMine ? 'mine' : 'theirs'}`;
+
+  const time  = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const label = isMine ? 'You' : escapeHtml(from);
+  const safeUrl  = dataUrl;
+  const safeName = escapeHtml(fileName);
+
+  let mediaHtml = '';
+
+  if (viewOnce && !isMine) {
+    // Receiver side — view-once tap to reveal
+    const voId = 'vo' + Date.now() + Math.random().toString(36).slice(2, 6);
+    mediaHtml = `
+      <div class="view-once-wrapper" id="${voId}">
+        <button class="view-once-btn" onclick="revealViewOnce('${voId}')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/>
+            <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          Tap to view once
+        </button>
+      </div>`;
+    // Store data temporarily in a closure map
+    window._voData = window._voData || {};
+    window._voData[voId] = { dataUrl, fileType, fileName };
+  } else if (fileType.startsWith('image/')) {
+    mediaHtml = `
+      <div class="file-media-wrap">
+        <img src="${safeUrl}" class="file-img" alt="${safeName}" loading="lazy"/>
+        <a href="${safeUrl}" download="${safeName}" class="file-download-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download
+        </a>
+      </div>`;
+  } else if (fileType.startsWith('video/')) {
+    mediaHtml = `
+      <div class="file-media-wrap">
+        <video src="${safeUrl}" class="file-video" controls playsinline></video>
+        <a href="${safeUrl}" download="${safeName}" class="file-download-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download
+        </a>
+      </div>`;
+  }
+
+  row.innerHTML = `${mediaHtml}<div class="message-meta">${label} · ${time}${(viewOnce && !isMine) ? ' · 👁 view once' : ''}</div>`;
+  DOM.messages.appendChild(row);
+  DOM.messages.scrollTop = DOM.messages.scrollHeight;
+}
+
+// View-once reveal: shows media, auto-destroys after 15 seconds
+window.revealViewOnce = function(voId) {
+  const wrapper = document.getElementById(voId);
+  if (!wrapper) return;
+  const data = window._voData?.[voId];
+  if (!data) return;
+
+  const { dataUrl, fileType, fileName } = data;
+  delete window._voData[voId];
+
+  let content = '';
+  const safeName = escapeHtml(fileName);
+
+  if (fileType.startsWith('image/')) {
+    content = `
+      <img src="${dataUrl}" class="file-img" style="animation:msg-in .3s ease both"/>
+      <a href="${dataUrl}" download="${safeName}" class="file-download-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download
+      </a>`;
+  } else if (fileType.startsWith('video/')) {
+    content = `
+      <video src="${dataUrl}" class="file-video" controls autoplay playsinline style="animation:msg-in .3s ease both"></video>
+      <a href="${dataUrl}" download="${safeName}" class="file-download-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download
+      </a>`;
+  }
+
+  wrapper.innerHTML = `<div class="file-media-wrap">${content}</div>`;
+
+  // Auto-expire after 15 seconds — replaces content so data can't be recovered from DOM
+  setTimeout(() => {
+    wrapper.innerHTML = `<div class="view-once-expired">👁 View once — expired</div>`;
+  }, 15000);
+};
 
 /* ── LANDING PAGE LOGIC ─────────────────────────────────── */
 
