@@ -289,13 +289,6 @@ function applyCallStateToTracks() {
   if (!state.localStream) return;
   state.localStream.getAudioTracks().forEach(track => {
     track.enabled = !state.isMuted;
-    try {
-      track.applyConstraints({
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }).catch(() => {});
-    } catch (e) { /* ignore */ }
   });
   state.localStream.getVideoTracks().forEach(track => {
     track.enabled = !state.isCameraOff;
@@ -406,6 +399,13 @@ const UI = {
     const isVoice = callType === 'voice';
     if (DOM.flipCamera)  DOM.flipCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
     if (DOM.toggleCamera) DOM.toggleCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
+    if (DOM.localPip) DOM.localPip.style.display = isVoice ? 'none' : '';
+
+    if (isVoice) {
+      DOM.callOverlay.classList.add('voice-mode');
+    } else {
+      DOM.callOverlay.classList.remove('voice-mode');
+    }
 
     // Volume bar only for calls with audio
     if (DOM.volumeBar) DOM.volumeBar.style.display = '';
@@ -456,7 +456,9 @@ const UI = {
 
     // Reset local video visibility
     DOM.localVideo.style.display = '';
+    if (DOM.localPip) DOM.localPip.style.display = '';
     DOM.screenShareInd.classList.add('hidden');
+    DOM.callOverlay.classList.remove('voice-mode');
 
     // Reset all control icons and labels
     state.callType      = null;
@@ -1218,4 +1220,3 @@ function escapeHtml(str) {
 /* ── INIT ───────────────────────────────────────────────── */
 initEmojiPicker();
 console.log('%c🔒 SecureLink', 'font-size:18px;font-weight:bold;color:#00e5cc');
-console.log('%c[secret: search 0322]', 'color:#4a5578;font-size:10px');

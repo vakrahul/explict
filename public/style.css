@@ -1074,7 +1074,45 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   height: 100%;
   object-fit: cover;
   background: var(--surface);
+  transition: opacity .3s;
 }
+
+.call-overlay.voice-mode {
+  background: radial-gradient(circle at center, #1a2245 0%, #07090f 100%);
+}
+
+.call-overlay.voice-mode #remote-video {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.voice-avatar {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px; height: 120px;
+  background: var(--surface-2);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  z-index: 5;
+}
+
+.call-overlay.voice-mode .voice-avatar {
+  display: flex;
+}
+
+.voice-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: ring-expand 2.5s ease-out infinite;
+}
+
+.voice-ring-2 { animation-delay: 1.25s; }
 
 /* Local PiP */
 .local-pip {
@@ -1165,7 +1203,8 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
 }
 
 .action-btn:hover, .action-btn:active { background: var(--surface-3); border-color: var(--border-glow); }
-.action-btn.active { background: rgba(0,229,204,.15); border-color: var(--accent); color: var(--accent); }
+.action-btn.active { background: rgba(255,255,255,.9); border-color: #fff; color: #000; }
+#toggle-mute.active { background: rgba(255, 77, 109, 0.2); border-color: var(--danger); color: var(--danger); }
 
 .action-btn.danger {
   background: var(--danger);
@@ -1537,8 +1576,15 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
 .action-btn:active { background: rgba(255,255,255,.15); }
 
 .action-btn.active {
-  background: rgba(255,255,255,.25);
-  border-color: rgba(255,255,255,.4);
+  background: rgba(255,255,255,.9);
+  border-color: #fff;
+  color: #000;
+}
+
+#toggle-mute.active {
+  background: rgba(255, 77, 109, 0.2);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .action-btn.danger {
