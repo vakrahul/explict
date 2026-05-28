@@ -1384,6 +1384,230 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   /* Messages wider */
   .message-row { max-width: 68%; }
 }
+
+/* ══════════════════════════════════════════════════════
+   FILE / MEDIA MESSAGES
+══════════════════════════════════════════════════════ */
+.file-media-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 260px;
+}
+
+.file-img {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 10px;
+  display: block;
+  cursor: zoom-in;
+  object-fit: cover;
+}
+
+.file-video {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 10px;
+  display: block;
+  background: #000;
+  max-height: 200px;
+}
+
+.file-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent);
+  text-decoration: none;
+  background: var(--accent-glow2);
+  border: 1px solid rgba(0,229,204,.2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  transition: background .2s;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.file-download-btn:hover { background: var(--accent-glow); }
+
+.view-once-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-3);
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  transition: background .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.view-once-btn:hover,
+.view-once-btn:active { background: var(--accent-glow); }
+
+.view-once-expired {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.file-sending {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ══════════════════════════════════════════════════════
+   PHONE-STYLE CALL CONTROLS
+══════════════════════════════════════════════════════ */
+.call-actions {
+  position: absolute;
+  bottom: max(32px, env(safe-area-inset-bottom, 32px));
+  left: 0; right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  z-index: 10;
+  padding: 0 24px;
+}
+
+.call-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.call-actions-end {
+  justify-content: center;
+}
+
+.call-action-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: rgba(255,255,255,.7);
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+.action-btn {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.15);
+  background: rgba(13,16,32,.85);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .2s;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+.action-btn:hover,
+.action-btn:active { background: rgba(255,255,255,.15); }
+
+.action-btn.active {
+  background: rgba(255,255,255,.25);
+  border-color: rgba(255,255,255,.4);
+}
+
+.action-btn.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  width: 64px; height: 64px;
+  box-shadow: 0 4px 20px rgba(255,77,109,.4);
+}
+
+.action-btn.danger:hover { background: var(--danger-dim); }
+
+/* Volume bar */
+.volume-bar {
+  position: absolute;
+  top: max(80px, env(safe-area-inset-top, 80px));
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: rgba(13,16,32,.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 100px;
+  padding: 14px 10px;
+  z-index: 10;
+  transition: opacity .3s;
+}
+
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 4px;
+  height: 100px;
+  background: rgba(255,255,255,.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+
+.volume-bar svg { color: rgba(255,255,255,.5); flex-shrink: 0; }
+
+@media (min-width: 640px) {
+  .call-actions { bottom: 40px; }
+  .action-btn { width: 58px; height: 58px; }
+  .action-btn.danger { width: 68px; height: 68px; }
+  .call-actions-row { gap: 24px; }
+  .volume-bar { right: 24px; }
+}
+
 /* ══════════════════════════════════════════════════════
    MOBILE NAV FIX (< 640px)
 ══════════════════════════════════════════════════════ */

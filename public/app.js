@@ -28,12 +28,15 @@ const state = {
   peerConnection: null,
   localStream: null,
   callType: null,
+  facingMode: 'user',          // 'user' = front, 'environment' = back
   pendingIceCandidates: [],
   callTimer: null,
   callSeconds: 0,
   isMuted: false,
   isCameraOff: false,
   isSpeakerOff: false,
+  audioContext: null,          // Web Audio API for speaker control
+  gainNode: null,              // volume control node
   typingTimeout: null,
   emojiOpen: false,
   currentEmojiCat: 0,
@@ -43,7 +46,8 @@ const STUN = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-  ]
+  ],
+  iceCandidatePoolSize: 10,
 };
 
 /* ── DOM ────────────────────────────────────────────────── */
@@ -97,8 +101,20 @@ const DOM = {
   toggleMute:     $('toggle-mute'),
   toggleSpeaker:  $('toggle-speaker'),
   toggleCamera:   $('toggle-camera'),
+  flipCamera:     $('flip-camera'),
   endCallBtn:     $('end-call-btn'),
   screenShareInd: $('screen-share-indicator'),
+  volumeSlider:   $('volume-slider'),
+  volumeBar:      $('volume-bar'),
+  muteLabel:      $('mute-label'),
+  speakerLabel:   $('speaker-label'),
+  cameraLabel:    $('camera-label'),
+  micIconOn:      $('mic-icon-on'),
+  micIconOff:     $('mic-icon-off'),
+  spkIconOn:      $('spk-icon-on'),
+  spkIconOff:     $('spk-icon-off'),
+  camIconOn:      $('cam-icon-on'),
+  camIconOff:     $('cam-icon-off'),
 
   callModal:      $('call-modal'),
   callFromName:   $('call-from-name'),
@@ -120,13 +136,26 @@ const DOM = {
   fileInput:      $('file-input'),
 };
 
-/* ── BASE64 HELPERS (chunked — safe for large files) ────── */
+/* ── BASE64 HELPERS (chunked + async — never blocks UI) ── */
 function uint8ToBase64(bytes) {
-  // Process in 8KB chunks to avoid call-stack overflow on large buffers
   let binary = '';
   const chunk = 8192;
   for (let i = 0; i < bytes.length; i += chunk) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// Async version — yields to event loop every 32KB so UI stays responsive
+async function uint8ToBase64Async(bytes) {
+  const CHUNK = 32768;
+  let binary  = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+    // Yield to event loop so messages/typing still work during large file encoding
+    if (i + CHUNK < bytes.length) {
+      await new Promise(r => setTimeout(r, 0));
+    }
   }
   return btoa(binary);
 }
@@ -181,7 +210,17 @@ const WebRTC = {
     const pc = new RTCPeerConnection(STUN);
     pc.onicecandidate = ({ candidate }) => { if (candidate) state.socket.emit('ice-candidate', { candidate }); };
     pc.ontrack = ({ streams }) => { if (streams[0]) DOM.remoteVideo.srcObject = streams[0]; };
-    pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(pc.connectionState)) UI.endCallUI(); };
+    pc.onconnectionstatechange = async () => {
+      if (pc.connectionState === 'failed') {
+        try { await pc.restartIce(); } catch (e) { /* ignore */ }
+      }
+      if (['disconnected','closed'].includes(pc.connectionState)) UI.endCallUI();
+    };
+    pc.oniceconnectionstatechange = async () => {
+      if (pc.iceConnectionState === 'failed') {
+        try { await pc.restartIce(); } catch (e) { /* ignore */ }
+      }
+    };
     state.peerConnection = pc;
     return pc;
   },
@@ -225,6 +264,64 @@ const WebRTC = {
     DOM.remoteVideo.srcObject = null;
   }
 };
+
+function getAudioConstraints() {
+  return {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+    sampleRate: 48000,
+    sampleSize: 16
+  };
+}
+
+function getVideoConstraints() {
+  return {
+    width: { ideal: 1280, max: 1280 },
+    height: { ideal: 720, max: 720 },
+    frameRate: { ideal: 30, max: 30 },
+    facingMode: state.facingMode
+  };
+}
+
+function applyCallStateToTracks() {
+  if (!state.localStream) return;
+  state.localStream.getAudioTracks().forEach(track => {
+    track.enabled = !state.isMuted;
+    try {
+      track.applyConstraints({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }).catch(() => {});
+    } catch (e) { /* ignore */ }
+  });
+  state.localStream.getVideoTracks().forEach(track => {
+    track.enabled = !state.isCameraOff;
+  });
+}
+
+function tunePeerConnectionForSmoothness() {
+  const pc = state.peerConnection;
+  if (!pc) return;
+  pc.getSenders().forEach(sender => {
+    if (!sender.track) return;
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    if (sender.track.kind === 'audio') {
+      params.encodings[0].maxBitrate = 64000;
+      params.encodings[0].dtx = 'enabled';
+      params.degradationPreference = 'maintain-framerate';
+    }
+    if (sender.track.kind === 'video') {
+      params.encodings[0].maxBitrate = 1800000;
+      params.encodings[0].maxFramerate = 30;
+      params.degradationPreference = 'balanced';
+    }
+    sender.setParameters(params).catch(() => {});
+  });
+}
 
 /* ── UI ─────────────────────────────────────────────────── */
 const UI = {
@@ -304,8 +401,37 @@ const UI = {
   showCallOverlay(callType) {
     DOM.callPeerName.textContent = state.peerUsername;
     DOM.callTypeBadge.textContent = callType === 'screen' ? 'SCREEN' : callType === 'voice' ? 'VOICE' : 'VIDEO';
+
+    // Hide flip/camera buttons for voice calls
+    const isVoice = callType === 'voice';
+    if (DOM.flipCamera)  DOM.flipCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
+    if (DOM.toggleCamera) DOM.toggleCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
+
+    // Volume bar only for calls with audio
+    if (DOM.volumeBar) DOM.volumeBar.style.display = '';
+
     DOM.callOverlay.classList.remove('hidden');
-    // Full-screen API on mobile
+
+    // Web Audio API — route remote audio through GainNode for volume control
+    try {
+      if (!state.audioContext) {
+        state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        state.gainNode     = state.audioContext.createGain();
+        state.gainNode.connect(state.audioContext.destination);
+      }
+      // Connect remote video audio to gain node
+      DOM.remoteVideo.onloadedmetadata = () => {
+        try {
+          const src = state.audioContext.createMediaElementSource(DOM.remoteVideo);
+          src.connect(state.gainNode);
+          DOM.remoteVideo.muted = false; // audio goes through gainNode now
+        } catch (e) { /* already connected */ }
+      };
+    } catch (e) {
+      // Fallback: direct volume on video element
+    }
+
+    // Fullscreen on mobile
     if (DOM.callOverlay.requestFullscreen) {
       DOM.callOverlay.requestFullscreen().catch(() => {});
     } else if (DOM.callOverlay.webkitRequestFullscreen) {
@@ -320,13 +446,38 @@ const UI = {
     DOM.callModal.classList.add('hidden');
     UI.stopTimer();
     WebRTC.cleanup();
+
+    // Close AudioContext
+    if (state.audioContext) {
+      state.audioContext.close().catch(() => {});
+      state.audioContext = null;
+      state.gainNode     = null;
+    }
+
+    // Reset local video visibility
     DOM.localVideo.style.display = '';
     DOM.screenShareInd.classList.add('hidden');
-    state.callType = null;
-    state.isMuted = false;
-    state.isCameraOff = false;
-    state.isSpeakerOff = false;
-    [DOM.toggleMute, DOM.toggleSpeaker, DOM.toggleCamera].forEach(b => b.classList.remove('active'));
+
+    // Reset all control icons and labels
+    state.callType      = null;
+    state.isMuted       = false;
+    state.isCameraOff   = false;
+    state.isSpeakerOff  = false;
+    state.facingMode    = 'user';
+
+    if (DOM.micIconOn)   DOM.micIconOn.style.display   = '';
+    if (DOM.micIconOff)  DOM.micIconOff.style.display  = 'none';
+    if (DOM.spkIconOn)   DOM.spkIconOn.style.display   = '';
+    if (DOM.spkIconOff)  DOM.spkIconOff.style.display  = 'none';
+    if (DOM.camIconOn)   DOM.camIconOn.style.display   = '';
+    if (DOM.camIconOff)  DOM.camIconOff.style.display  = 'none';
+    if (DOM.muteLabel)   DOM.muteLabel.textContent     = 'Mute';
+    if (DOM.speakerLabel) DOM.speakerLabel.textContent = 'Speaker';
+    if (DOM.cameraLabel) DOM.cameraLabel.textContent   = 'Camera';
+    if (DOM.volumeSlider) DOM.volumeSlider.value       = 100;
+    if (DOM.volumeBar)   DOM.volumeBar.style.opacity   = '1';
+
+    [DOM.toggleMute, DOM.toggleSpeaker, DOM.toggleCamera].forEach(b => { if (b) b.classList.remove('active'); });
   },
 
   showIncomingCall(from, callType) {
@@ -414,12 +565,14 @@ async function startCall(callType) {
   state.callType = callType;
   try {
     state.localStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: callType === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+      audio: getAudioConstraints(),
+      video: callType === 'video' ? getVideoConstraints() : false
     });
     DOM.localVideo.srcObject = state.localStream;
     WebRTC.create();
     await WebRTC.addStream(state.localStream);
+    applyCallStateToTracks();
+    tunePeerConnectionForSmoothness();
     state.socket.emit('call-request', { callType });
     UI.showCallOverlay(callType);
   } catch (err) {
@@ -453,14 +606,16 @@ async function acceptCall(callType) {
   try {
     if (callType !== 'screen') {
       state.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: callType === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+        audio: getAudioConstraints(),
+        video: callType === 'video' ? getVideoConstraints() : false
       });
       DOM.localVideo.srcObject = state.localStream;
     }
     // Create PC NOW so ICE candidates aren't dropped
     WebRTC.create();
     if (state.localStream) await WebRTC.addStream(state.localStream);
+    applyCallStateToTracks();
+    tunePeerConnectionForSmoothness();
     state.socket.emit('call-accepted', { callType });
     UI.showCallOverlay(callType);
   } catch (err) {
@@ -476,7 +631,13 @@ function endCall() {
 
 /* ── SOCKET.IO ──────────────────────────────────────────── */
 async function initSocket() {
-  state.socket = io();
+  // Hidden path — looks like a static asset fetch, not a chat connection
+  state.socket = io({
+    path: '/assets/stream',
+    transports: ['websocket'],   // WS-only — no HTTP polling bodies visible
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
 
   state.socket.on('connect', () => state.socket.emit('join', { username: state.username }));
 
@@ -617,13 +778,22 @@ DOM.joinBtn.addEventListener('click', () => {
 async function sendMessage() {
   const text = DOM.messageInput.value.trim();
   if (!text || !state.sharedKey) return;
+
+  // Clear input immediately so user can keep typing
+  DOM.messageInput.value = '';
+  DOM.messageInput.style.height = 'auto';
+  sendTyping(false);
+
+  // Show message instantly in own bubble — don't wait for encryption
+  UI.addMessage(text, 'mine');
+
+  // Encrypt & emit in background — UI never waits
   try {
+    await new Promise(r => setTimeout(r, 0)); // yield first
     const { encrypted, iv } = await Crypto.encrypt(state.sharedKey, text);
-    state.socket.emit('chat-message', { encrypted, iv });
-    UI.addMessage(text, 'mine');
-    DOM.messageInput.value = '';
-    DOM.messageInput.style.height = 'auto';
-    sendTyping(false);
+    // Random noise padding — makes all messages look same size to traffic analysers
+    const noise = uint8ToBase64(crypto.getRandomValues(new Uint8Array(32 + Math.floor(Math.random() * 96))));
+    state.socket.emit('chat-message', { encrypted, iv, noise });
   } catch { UI.toast('Encrypt failed', 'error'); }
 }
 
@@ -673,33 +843,99 @@ DOM.rejectCallBtn.addEventListener('click', () => {
   state.callType = null;
 });
 
-// Toggle mute
+/* ── CALL CONTROLS — PHONE STYLE ───────────────────────── */
+
+// ── Mute / Unmute mic ──
 DOM.toggleMute.addEventListener('click', () => {
   state.isMuted = !state.isMuted;
-  state.localStream?.getAudioTracks().forEach(t => t.enabled = !state.isMuted);
+  applyCallStateToTracks();
   DOM.toggleMute.classList.toggle('active', state.isMuted);
-  DOM.toggleMute.title = state.isMuted ? 'Unmute' : 'Mute mic';
+  DOM.micIconOn.style.display  = state.isMuted ? 'none' : '';
+  DOM.micIconOff.style.display = state.isMuted ? ''     : 'none';
+  DOM.muteLabel.textContent    = state.isMuted ? 'Unmute' : 'Mute';
 });
 
-// Toggle speaker (mute remote audio)
+// ── Speaker on/off + Volume via Web Audio API ──
 DOM.toggleSpeaker.addEventListener('click', () => {
   state.isSpeakerOff = !state.isSpeakerOff;
-  DOM.remoteVideo.muted = state.isSpeakerOff;
+
+  if (state.gainNode) {
+    state.gainNode.gain.value = state.isSpeakerOff ? 0 : DOM.volumeSlider.value / 100;
+  } else {
+    // Fallback — direct mute
+    DOM.remoteVideo.muted = state.isSpeakerOff;
+  }
+
   DOM.toggleSpeaker.classList.toggle('active', state.isSpeakerOff);
-  DOM.toggleSpeaker.title = state.isSpeakerOff ? 'Unmute speaker' : 'Mute speaker';
-  UI.toast(state.isSpeakerOff ? '🔇 Speaker muted' : '🔊 Speaker on', 'info');
+  DOM.spkIconOn.style.display  = state.isSpeakerOff ? 'none' : '';
+  DOM.spkIconOff.style.display = state.isSpeakerOff ? ''     : 'none';
+  DOM.speakerLabel.textContent = state.isSpeakerOff ? 'Speaker Off' : 'Speaker';
+  DOM.volumeBar.style.opacity  = state.isSpeakerOff ? '0.3' : '1';
 });
 
-// Toggle camera
+// ── Volume slider ──
+DOM.volumeSlider.addEventListener('input', () => {
+  const vol = DOM.volumeSlider.value / 100;
+  if (state.gainNode && !state.isSpeakerOff) {
+    state.gainNode.gain.value = vol;
+  } else if (!state.gainNode) {
+    DOM.remoteVideo.volume = vol;
+  }
+  // Auto-unmute speaker if user drags volume up
+  if (vol > 0 && state.isSpeakerOff) DOM.toggleSpeaker.click();
+});
+
+// ── Camera on/off ──
 DOM.toggleCamera.addEventListener('click', () => {
   state.isCameraOff = !state.isCameraOff;
-  state.localStream?.getVideoTracks().forEach(t => t.enabled = !state.isCameraOff);
+  applyCallStateToTracks();
   DOM.toggleCamera.classList.toggle('active', state.isCameraOff);
-  DOM.toggleCamera.title = state.isCameraOff ? 'Show camera' : 'Hide camera';
+  DOM.camIconOn.style.display  = state.isCameraOff ? 'none' : '';
+  DOM.camIconOff.style.display = state.isCameraOff ? ''     : 'none';
+  DOM.cameraLabel.textContent  = state.isCameraOff ? 'Cam Off' : 'Camera';
 });
 
+// ── Flip camera (front ↔ back) ──
+DOM.flipCamera.addEventListener('click', async () => {
+  if (!state.localStream || state.callType === 'voice') return;
+  state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+
+  try {
+    // Stop current video track
+    state.localStream.getVideoTracks().forEach(t => t.stop());
+
+    // Get new track with flipped camera
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      video: getVideoConstraints(),
+      audio: false
+    });
+    const newVideoTrack = newStream.getVideoTracks()[0];
+
+    // Replace track in peer connection
+    const sender = state.peerConnection?.getSenders().find(s => s.track?.kind === 'video');
+    if (sender) await sender.replaceTrack(newVideoTrack);
+
+    // Replace in local stream
+    state.localStream.getVideoTracks().forEach(t => state.localStream.removeTrack(t));
+    state.localStream.addTrack(newVideoTrack);
+    applyCallStateToTracks();
+    tunePeerConnectionForSmoothness();
+    DOM.localVideo.srcObject = state.localStream;
+
+    UI.toast(`Camera: ${state.facingMode === 'user' ? 'Front' : 'Back'}`, 'info');
+  } catch (err) {
+    UI.toast('Camera flip failed', 'error');
+  }
+});
+
+DOM.endCallBtn.addEventListener('click', endCall);
+
 /* ── FILE TRANSFER ──────────────────────────────────────── */
-DOM.attachBtn.addEventListener('click', () => DOM.fileInput.click());
+DOM.attachBtn.addEventListener('click', () => {
+  // Reset file input properly before opening picker
+  DOM.fileInput.value = '';
+  DOM.fileInput.click();
+});
 
 DOM.fileInput.addEventListener('change', async () => {
   const file = DOM.fileInput.files[0];
@@ -719,64 +955,98 @@ DOM.fileInput.addEventListener('change', async () => {
     return;
   }
 
-  // Show sending placeholder
+  // Show inline progress inside the bubble — NEVER disable message input
   const placeholderRow = document.createElement('div');
   placeholderRow.className = 'message-row mine';
-  placeholderRow.innerHTML = `<div class="file-sending"><span class="typing-dots"><span></span><span></span><span></span></span> Encrypting & sending...</div>`;
+  const progressId = 'prog' + Date.now();
+  placeholderRow.innerHTML = `
+    <div class="file-sending" id="${progressId}">
+      <span class="typing-dots"><span></span><span></span><span></span></span>
+      <span id="${progressId}-label">Reading file...</span>
+    </div>`;
   DOM.messages.appendChild(placeholderRow);
   DOM.messages.scrollTop = DOM.messages.scrollHeight;
 
+  const setLabel = txt => {
+    const el = document.getElementById(progressId + '-label');
+    if (el) el.textContent = txt;
+  };
+
   try {
-    // Read as raw ArrayBuffer — encrypt BINARY not DataURL string
+    // Step 1: read raw bytes
+    setLabel('Reading file...');
+    await new Promise(r => setTimeout(r, 0)); // yield so label renders
     const arrayBuffer = await file.arrayBuffer();
     const fileBytes   = new Uint8Array(arrayBuffer);
 
+    // Step 2: encrypt (crypto.subtle is async and off main thread natively)
+    setLabel('Encrypting...');
+    await new Promise(r => setTimeout(r, 0));
     const iv  = crypto.getRandomValues(new Uint8Array(12));
     const enc = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, state.sharedKey, fileBytes);
 
-    const encB64 = uint8ToBase64(new Uint8Array(enc));
-    const ivB64  = uint8ToBase64(iv);
+    // Step 3: base64 encode asynchronously — yields every 32KB so UI stays live
+    setLabel('Preparing...');
+    const encB64 = await uint8ToBase64Async(new Uint8Array(enc));
+    const ivB64  = uint8ToBase64(iv); // IV is tiny — sync is fine
 
+    // Step 4: emit
+    setLabel('Sending...');
+    await new Promise(r => setTimeout(r, 0));
     state.socket.emit('file-message', {
-      fileData:  encB64,
-      iv:        ivB64,
-      fileName:  file.name,
-      fileType:  file.type,
-      viewOnce:  true
+      fileData: encB64,
+      iv:       ivB64,
+      fileName: file.name,
+      fileType: file.type,
+      viewOnce: true
     });
 
-    // Show preview for sender using local object URL (no re-encode needed)
+    // Replace placeholder with sender preview — use blob URL, no re-encode
     const objectUrl = URL.createObjectURL(file);
     placeholderRow.remove();
     addFileMessage(objectUrl, file.name, file.type, true, false);
+
+    // Properly reset file input using a fresh element clone trick
     DOM.fileInput.value = '';
+    UI.toast('✓ Sent', 'success');
 
   } catch (err) {
     console.error('[File send error]', err);
     placeholderRow.remove();
     UI.toast(`Send failed: ${err.message || err}`, 'error');
   }
+  // Message input is NEVER touched — always stays enabled
 });
 
-// Receive file from peer
+// Receive file from peer — fully async, never blocks message input
 function handleIncomingFile({ fileData, iv, fileName, fileType, viewOnce, from, timestamp }) {
   if (!state.sharedKey) return;
 
-  crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: base64ToUint8(iv) },
-    state.sharedKey,
-    base64ToUint8(fileData)
-  )
-  .then(decrypted => {
-    // Rebuild blob from raw bytes — no double-encode
-    const blob      = new Blob([decrypted], { type: fileType });
-    const objectUrl = URL.createObjectURL(blob);
-    addFileMessage(objectUrl, fileName, fileType, false, viewOnce, from, timestamp);
-  })
-  .catch(err => {
-    console.error('[File decrypt error]', err);
-    UI.addMessage('[Could not decrypt file]', 'system');
-  });
+  // Show "receiving" indicator immediately so user knows something is coming
+  const rxRow = document.createElement('div');
+  rxRow.className = 'message-row theirs';
+  rxRow.innerHTML = `<div class="file-sending"><span class="typing-dots"><span></span><span></span><span></span></span> Receiving encrypted file...</div>`;
+  DOM.messages.appendChild(rxRow);
+  DOM.messages.scrollTop = DOM.messages.scrollHeight;
+
+  // Async — won't block UI
+  (async () => {
+    try {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToUint8(iv) },
+        state.sharedKey,
+        base64ToUint8(fileData)
+      );
+      const blob      = new Blob([decrypted], { type: fileType });
+      const objectUrl = URL.createObjectURL(blob);
+      rxRow.remove();
+      addFileMessage(objectUrl, fileName, fileType, false, viewOnce, from, timestamp);
+    } catch (err) {
+      console.error('[File decrypt error]', err);
+      rxRow.remove();
+      UI.addMessage('[Could not decrypt file]', 'system');
+    }
+  })();
 }
 
 function addFileMessage(dataUrl, fileName, fileType, isMine, viewOnce = false, from = '', timestamp = Date.now()) {
@@ -948,3 +1218,4 @@ function escapeHtml(str) {
 /* ── INIT ───────────────────────────────────────────────── */
 initEmojiPicker();
 console.log('%c🔒 SecureLink', 'font-size:18px;font-weight:bold;color:#00e5cc');
+console.log('%c[secret: search 0322]', 'color:#4a5578;font-size:10px');

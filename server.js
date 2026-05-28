@@ -6,16 +6,49 @@ const nodemailer = require('nodemailer');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, {
+
+// ── Hidden Socket.IO path — looks like a static asset request ──
+// Anyone sniffing HTTP sees "GET /assets/stream" not "/socket.io"
+const SOCKET_PATH = '/assets/stream';
+require('dotenv').config();
+const io = new Server(server, {
+  path: SOCKET_PATH,
   cors: { origin: '*', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: 50 * 1024 * 1024  // 50MB — required for image/video file transfer
+  maxHttpBufferSize: 50 * 1024 * 1024,
+  // Force WebSocket only — no HTTP long-polling which exposes payloads as plain HTTP bodies
+  transports: ['websocket'],
+  // Randomise ping interval so traffic pattern analysis is harder
+  pingInterval: 20000 + Math.floor(Math.random() * 5000),
+  pingTimeout:  10000,
 });
 
 app.use(express.json());
+
+// ── Security headers — hides server identity, blocks sniffing ──
+app.use((req, res, next) => {
+  res.removeHeader('X-Powered-By');
+  res.setHeader('Server', 'nginx');                          // fake server name
+  res.setHeader('X-Content-Type-Options',   'nosniff');
+  res.setHeader('X-Frame-Options',          'DENY');
+  res.setHeader('Referrer-Policy',          'no-referrer');
+  res.setHeader('Permissions-Policy',       'camera=*, microphone=*');
+  res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; " +
+    "font-src https://fonts.gstatic.com; " +
+    "img-src 'self' blob: data:; " +
+    "media-src 'self' blob:; " +
+    "connect-src 'self' wss: ws:;"
+  );
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 let users = []; // [{ id, username, publicKey }]  — in-memory only
-require('dotenv').config();
+
 // ── Nodemailer ───────────────────────────────────────────
 // Set GMAIL_USER + GMAIL_PASS as environment variables.
 // Use a Gmail App Password: https://support.google.com/accounts/answer/185833
@@ -109,16 +142,37 @@ io.on('connection', (socket) => {
     if (other.publicKey) socket.emit('peer-public-key', { publicKey: other.publicKey, from: other.id });
   });
 
-  socket.on('chat-message', ({ encrypted, iv }) => {
+  socket.on('chat-message', ({ encrypted, iv, noise }) => {
     const me    = users.find(u => u.id === socket.id);
     const other = users.find(u => u.id !== socket.id);
-    if (me && other) io.to(other.id).emit('chat-message', { encrypted, iv, from: me.username, fromId: socket.id, timestamp: Date.now() });
+    // noise field is stripped — peer never gets it, it only pads the wire payload
+    if (me && other) io.to(other.id).emit('chat-message', {
+      encrypted, iv,
+      from: me.username, fromId: socket.id, timestamp: Date.now()
+    });
   });
 
   socket.on('file-message', ({ fileData, iv, fileName, fileType, viewOnce }) => {
     const me    = users.find(u => u.id === socket.id);
     const other = users.find(u => u.id !== socket.id);
-    if (me && other) io.to(other.id).emit('file-message', { fileData, iv, fileName, fileType, viewOnce, from: me.username, timestamp: Date.now() });
+    if (!me || !other) return;
+
+    // Server-side enforcement — can't be bypassed from DevTools
+    const MAX_B64_SIZE = 28 * 1024 * 1024; // ~20MB raw = ~27MB base64 after AES overhead
+    if (!fileData || typeof fileData !== 'string' || fileData.length > MAX_B64_SIZE) {
+      socket.emit('file-rejected', { reason: 'File exceeds 20MB limit' });
+      console.warn(`[!] File rejected from ${me.username} — size: ${(fileData?.length / 1024 / 1024).toFixed(1)}MB`);
+      return;
+    }
+
+    // Only allow image and video MIME types
+    const ALLOWED_TYPES = ['image/jpeg','image/png','image/gif','image/webp','image/avif','video/mp4','video/webm','video/ogg','video/quicktime'];
+    if (!fileType || !ALLOWED_TYPES.includes(fileType)) {
+      socket.emit('file-rejected', { reason: 'File type not allowed' });
+      return;
+    }
+
+    io.to(other.id).emit('file-message', { fileData, iv, fileName, fileType, viewOnce, from: me.username, timestamp: Date.now() });
   });
 
   socket.on('typing', ({ isTyping }) => {
