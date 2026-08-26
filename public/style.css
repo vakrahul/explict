@@ -1091,6 +1091,9 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   height: min(100%, calc(100vw * 16 / 9));
   aspect-ratio: 9 / 16;
   object-fit: cover;
+  object-position: var(--face-x, 50%) var(--face-y, 28%);
+  transform: scale(var(--face-zoom, 1.82));
+  transform-origin: var(--face-x, 50%) var(--face-y, 28%);
   border-radius: 0;
 }
 
@@ -1166,6 +1169,13 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: var(--face-x, 50%) var(--face-y, 28%);
+  transform: scale(var(--face-zoom, 1.82));
+  transform-origin: var(--face-x, 50%) var(--face-y, 28%);
+}
+
+.call-overlay.video-mode.front-camera #local-video {
+  transform: scaleX(-1) scale(var(--face-zoom, 1.82));
 }
 
 .screen-share-indicator {

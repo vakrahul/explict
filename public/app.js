@@ -286,6 +286,114 @@ function getVideoConstraints() {
   };
 }
 
+/* Pull the camera in optically when the device supports zoom. */
+async function applyCameraCloseup(stream) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track) return;
+  const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+  const next = {};
+  if (caps.zoom) {
+    const min = caps.zoom.min ?? 1;
+    const max = caps.zoom.max ?? 1;
+    next.zoom = Math.min(max, Math.max(min, min + (max - min) * 0.55));
+  }
+  if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+    next.focusMode = 'continuous';
+  }
+  if (!Object.keys(next).length) return;
+  try {
+    await track.applyConstraints({ advanced: [next] });
+  } catch {
+    await track.applyConstraints(next).catch(() => {});
+  }
+}
+
+/* Real-time face framing: keep the face large and near the lens. */
+const FaceCloseup = {
+  timer: null,
+  detector: null,
+  local:  { x: 50, y: 28, z: 1.82 },
+  remote: { x: 50, y: 28, z: 1.82 },
+
+  apply(el, frame) {
+    if (!el) return;
+    el.style.setProperty('--face-x', `${frame.x}%`);
+    el.style.setProperty('--face-y', `${frame.y}%`);
+    el.style.setProperty('--face-zoom', String(frame.z));
+  },
+
+  lerp(frame, x, y, z) {
+    frame.x += (x - frame.x) * 0.22;
+    frame.y += (y - frame.y) * 0.22;
+    frame.z += (z - frame.z) * 0.18;
+  },
+
+  async readFace(video) {
+    if (!this.detector || !video || video.readyState < 2 || video.videoWidth < 16) return null;
+    try {
+      const faces = await this.detector.detect(video);
+      const face = faces?.[0];
+      if (!face) return null;
+      const box = face.boundingBox;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const cx = ((box.x + box.width / 2) / vw) * 100;
+      const cy = ((box.y + box.height * 0.38) / vh) * 100;
+      const faceShare = box.height / vh;
+      const zoom = Math.min(2.35, Math.max(1.45, 0.62 / Math.max(faceShare, 0.12)));
+      return { x: Math.min(78, Math.max(22, cx)), y: Math.min(48, Math.max(16, cy)), z: zoom };
+    } catch {
+      return null;
+    }
+  },
+
+  start() {
+    this.stop();
+    this.local  = { x: 50, y: 28, z: 1.82 };
+    this.remote = { x: 50, y: 28, z: 1.82 };
+    this.apply(DOM.localVideo, this.local);
+    this.apply(DOM.remoteVideo, this.remote);
+
+    if ('FaceDetector' in window) {
+      try { this.detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); }
+      catch { this.detector = null; }
+    }
+
+    const tick = async () => {
+      if (state.callType !== 'video') return;
+      const [localHit, remoteHit] = await Promise.all([
+        this.readFace(DOM.localVideo),
+        this.readFace(DOM.remoteVideo)
+      ]);
+      if (localHit) {
+        this.lerp(this.local, localHit.x, localHit.y, localHit.z);
+        this.apply(DOM.localVideo, this.local);
+      }
+      if (remoteHit) {
+        this.lerp(this.remote, remoteHit.x, remoteHit.y, remoteHit.z);
+        this.apply(DOM.remoteVideo, this.remote);
+      }
+    };
+
+    this.timer = setInterval(tick, 110);
+    tick();
+  },
+
+  stop() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.detector = null;
+    [DOM.localVideo, DOM.remoteVideo].forEach(el => {
+      if (!el) return;
+      el.style.removeProperty('--face-x');
+      el.style.removeProperty('--face-y');
+      el.style.removeProperty('--face-zoom');
+    });
+  }
+};
+
 function applyCallStateToTracks() {
   if (!state.localStream) return;
   state.localStream.getAudioTracks().forEach(track => {
@@ -406,6 +514,10 @@ const UI = {
     DOM.callOverlay.classList.toggle('voice-mode', isVoice);
     DOM.callOverlay.classList.toggle('screen-mode', isScreen);
     DOM.callOverlay.classList.toggle('video-mode', !isVoice && !isScreen);
+    DOM.callOverlay.classList.toggle('front-camera', !isVoice && !isScreen && state.facingMode === 'user');
+
+    if (!isVoice && !isScreen) FaceCloseup.start();
+    else FaceCloseup.stop();
 
     // Volume bar only for calls with audio
     if (DOM.volumeBar) DOM.volumeBar.style.display = '';
@@ -458,7 +570,8 @@ const UI = {
     DOM.localVideo.style.display = '';
     if (DOM.localPip) DOM.localPip.style.display = '';
     DOM.screenShareInd.classList.add('hidden');
-    DOM.callOverlay.classList.remove('voice-mode', 'screen-mode', 'video-mode');
+    FaceCloseup.stop();
+    DOM.callOverlay.classList.remove('voice-mode', 'screen-mode', 'video-mode', 'front-camera');
 
     // Reset all control icons and labels
     state.callType      = null;
@@ -571,6 +684,7 @@ async function startCall(callType) {
       video: callType === 'video' ? getVideoConstraints() : false
     });
     DOM.localVideo.srcObject = state.localStream;
+    if (callType === 'video') await applyCameraCloseup(state.localStream);
     WebRTC.create();
     await WebRTC.addStream(state.localStream);
     applyCallStateToTracks();
@@ -612,6 +726,7 @@ async function acceptCall(callType) {
         video: callType === 'video' ? getVideoConstraints() : false
       });
       DOM.localVideo.srcObject = state.localStream;
+      if (callType === 'video') await applyCameraCloseup(state.localStream);
     }
     // Create PC NOW so ICE candidates aren't dropped
     WebRTC.create();
@@ -923,6 +1038,9 @@ DOM.flipCamera.addEventListener('click', async () => {
     applyCallStateToTracks();
     tunePeerConnectionForSmoothness();
     DOM.localVideo.srcObject = state.localStream;
+    await applyCameraCloseup(state.localStream);
+    DOM.callOverlay.classList.toggle('front-camera', state.facingMode === 'user');
+    if (state.callType === 'video') FaceCloseup.start();
 
     UI.toast(`Camera: ${state.facingMode === 'user' ? 'Front' : 'Back'}`, 'info');
   } catch (err) {
