@@ -278,10 +278,11 @@ function getAudioConstraints() {
 
 function getVideoConstraints() {
   return {
-    width: { ideal: 1280, max: 1280 },
-    height: { ideal: 720, max: 720 },
+    width: { ideal: 720 },
+    height: { ideal: 1280 },
+    aspectRatio: { ideal: 9 / 16 },
     frameRate: { ideal: 30, max: 30 },
-    facingMode: state.facingMode
+    facingMode: { ideal: state.facingMode }
   };
 }
 
@@ -397,15 +398,14 @@ const UI = {
 
     // Hide flip/camera buttons for voice calls
     const isVoice = callType === 'voice';
+    const isScreen = callType === 'screen';
     if (DOM.flipCamera)  DOM.flipCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
     if (DOM.toggleCamera) DOM.toggleCamera.closest('.call-action-wrap').style.display = isVoice ? 'none' : '';
     if (DOM.localPip) DOM.localPip.style.display = isVoice ? 'none' : '';
 
-    if (isVoice) {
-      DOM.callOverlay.classList.add('voice-mode');
-    } else {
-      DOM.callOverlay.classList.remove('voice-mode');
-    }
+    DOM.callOverlay.classList.toggle('voice-mode', isVoice);
+    DOM.callOverlay.classList.toggle('screen-mode', isScreen);
+    DOM.callOverlay.classList.toggle('video-mode', !isVoice && !isScreen);
 
     // Volume bar only for calls with audio
     if (DOM.volumeBar) DOM.volumeBar.style.display = '';
@@ -458,7 +458,7 @@ const UI = {
     DOM.localVideo.style.display = '';
     if (DOM.localPip) DOM.localPip.style.display = '';
     DOM.screenShareInd.classList.add('hidden');
-    DOM.callOverlay.classList.remove('voice-mode');
+    DOM.callOverlay.classList.remove('voice-mode', 'screen-mode', 'video-mode');
 
     // Reset all control icons and labels
     state.callType      = null;

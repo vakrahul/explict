@@ -33,7 +33,7 @@ No separate frontend deployment needed — just deploy the Node.js server.
 1. Go to → https://railway.app → **New Project → Deploy from GitHub**
 2. Select your repo
 3. Railway auto-detects Node.js and runs `npm start`
-4. Set env variable: `PORT = 3000` (optional, Railway sets it automatically)
+4. Set env variable: `PORT = 43123` (optional, Railway sets it automatically)
 5. Click **Generate Domain** in Settings → Networking
 
 > ✅ HTTPS is automatic.
@@ -85,7 +85,7 @@ sudo certbot --nginx -d yourchat.yourdomain.com
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `3000` | Port the server listens on |
+| `PORT` | `43123` | Port the server listens on |
 
 ---
 

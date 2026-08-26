@@ -42,7 +42,9 @@ npm install
 npm start
 ```
 
-App runs at: **http://localhost:3000**
+App runs at: **http://localhost:43123**
+
+Video calls capture and display in **9:16** (portrait). Screen share stays landscape.
 
 Open in two different browser tabs/windows. Share the URL with your peer.
 
@@ -69,7 +71,7 @@ secure-chat/
 | Text chat | Socket.IO + AES-256-GCM (Web Crypto API) |
 | Key exchange | ECDH P-256 + HKDF via Socket.IO |
 | Voice call | WebRTC `getUserMedia({ audio: true })` |
-| Video call | WebRTC `getUserMedia({ video: true, audio: true })` |
+| Video call | WebRTC portrait 9:16 (`720×1280` ideal, `aspectRatio: 9/16`) |
 | Screen share | WebRTC `getDisplayMedia()` |
 | Mute/unmute | `audioTrack.enabled = false` |
 | Camera on/off | `videoTrack.enabled = false` |
@@ -98,7 +100,7 @@ The frontend is served by Express from the `/public` folder. No separate deploym
 
 ### Environment Variables
 ```env
-PORT=3000   # optional, defaults to 3000
+PORT=43123  # optional, defaults to 43123
 ```
 
 ---
