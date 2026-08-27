@@ -225,19 +225,33 @@ const WebRTC = {
     return pc;
   },
   async addStream(stream) {
-    stream.getTracks().forEach(t => state.peerConnection.addTrack(t, stream));
+    stream.getTracks().forEach(track => {
+      if (track.kind === 'video') track.contentHint = 'detail';
+      state.peerConnection.addTrack(track, stream);
+    });
+    preferSharpVideoCodecs(state.peerConnection);
   },
   async createOffer() {
     const o = await state.peerConnection.createOffer();
-    await state.peerConnection.setLocalDescription(o);
-    return o;
+    const boosted = { type: o.type, sdp: boostSdpVideoBitrate(o.sdp) };
+    try {
+      await state.peerConnection.setLocalDescription(boosted);
+    } catch {
+      await state.peerConnection.setLocalDescription(o);
+    }
+    return state.peerConnection.localDescription;
   },
   async handleOffer(offer) {
     await state.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
     await WebRTC.flushICE();
     const a = await state.peerConnection.createAnswer();
-    await state.peerConnection.setLocalDescription(a);
-    return a;
+    const boosted = { type: a.type, sdp: boostSdpVideoBitrate(a.sdp) };
+    try {
+      await state.peerConnection.setLocalDescription(boosted);
+    } catch {
+      await state.peerConnection.setLocalDescription(a);
+    }
+    return state.peerConnection.localDescription;
   },
   async handleAnswer(answer) {
     await state.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
@@ -278,11 +292,63 @@ function getAudioConstraints() {
 
 function getVideoConstraints() {
   return {
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-    frameRate: { ideal: 30, max: 30 },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30, max: 60 },
     facingMode: { ideal: state.facingMode }
   };
+}
+
+async function applyBestCameraQuality(stream) {
+  const track = stream?.getVideoTracks?.()[0];
+  if (!track) return;
+  track.contentHint = 'detail';
+  const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+  const width = caps.width?.max ? Math.min(1920, caps.width.max) : 1920;
+  const height = caps.height?.max ? Math.min(1080, caps.height.max) : 1080;
+  const frameRate = caps.frameRate?.max ? Math.min(30, caps.frameRate.max) : 30;
+  try {
+    await track.applyConstraints({
+      width: { ideal: width },
+      height: { ideal: height },
+      frameRate: { ideal: frameRate }
+    });
+  } catch {
+    /* keep the stream getUserMedia already produced */
+  }
+}
+
+function preferSharpVideoCodecs(pc) {
+  if (!pc || typeof RTCRtpSender.getCapabilities !== 'function') return;
+  const caps = RTCRtpSender.getCapabilities('video');
+  if (!caps?.codecs?.length) return;
+  const rank = mime => {
+    const m = (mime || '').toLowerCase();
+    if (m === 'video/av1') return 0;
+    if (m === 'video/vp9') return 1;
+    if (m === 'video/h264') return 2;
+    if (m === 'video/vp8') return 3;
+    return 4;
+  };
+  const preferred = [...caps.codecs].sort((a, b) => rank(a.mimeType) - rank(b.mimeType));
+  pc.getTransceivers().forEach(t => {
+    if (t.sender?.track?.kind !== 'video' || typeof t.setCodecPreferences !== 'function') return;
+    try { t.setCodecPreferences(preferred); } catch { /* unsupported in this browser */ }
+  });
+}
+
+function boostSdpVideoBitrate(sdp, asKbps = 5500) {
+  if (!sdp) return sdp;
+  return sdp.replace(/m=video[\s\S]*?(?=m=|$)/g, block => {
+    if (/b=AS:/.test(block)) block = block.replace(/b=AS:\d+/g, `b=AS:${asKbps}`);
+    else block = block.replace(/^(m=video[^\r\n]*(?:\r\n|\n))/, `$1b=AS:${asKbps}\r\n`);
+    return block.replace(/a=fmtp:(\d+) ([^\r\n]*)/g, (line, pt, rest) => {
+      if (/apt=/.test(rest) || /red|ulpfec|flexfec|rtx/i.test(rest)) return line;
+      if (/x-google-max-bitrate/.test(rest)) return line;
+      if (!/(profile-id|profile-level-id|level-idx|packetization-mode)/.test(rest)) return line;
+      return `a=fmtp:${pt} ${rest};x-google-min-bitrate=2500;x-google-start-bitrate=4000;x-google-max-bitrate=6000`;
+    });
+  });
 }
 
 function applyCallStateToTracks() {
@@ -303,14 +369,15 @@ function tunePeerConnectionForSmoothness() {
     const params = sender.getParameters();
     if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
     if (sender.track.kind === 'audio') {
-      params.encodings[0].maxBitrate = 64000;
+      params.encodings[0].maxBitrate = 128000;
       params.encodings[0].dtx = 'enabled';
       params.degradationPreference = 'maintain-framerate';
     }
     if (sender.track.kind === 'video') {
-      params.encodings[0].maxBitrate = 1800000;
+      params.encodings[0].maxBitrate = 5500000;
       params.encodings[0].maxFramerate = 30;
-      params.degradationPreference = 'balanced';
+      params.encodings[0].scaleResolutionDownBy = 1;
+      params.degradationPreference = 'maintain-resolution';
     }
     sender.setParameters(params).catch(() => {});
   });
@@ -570,6 +637,7 @@ async function startCall(callType) {
       audio: getAudioConstraints(),
       video: callType === 'video' ? getVideoConstraints() : false
     });
+    if (callType === 'video') await applyBestCameraQuality(state.localStream);
     DOM.localVideo.srcObject = state.localStream;
     WebRTC.create();
     await WebRTC.addStream(state.localStream);
@@ -611,6 +679,7 @@ async function acceptCall(callType) {
         audio: getAudioConstraints(),
         video: callType === 'video' ? getVideoConstraints() : false
       });
+      if (callType === 'video') await applyBestCameraQuality(state.localStream);
       DOM.localVideo.srcObject = state.localStream;
     }
     // Create PC NOW so ICE candidates aren't dropped
@@ -911,7 +980,9 @@ DOM.flipCamera.addEventListener('click', async () => {
       video: getVideoConstraints(),
       audio: false
     });
+    await applyBestCameraQuality(newStream);
     const newVideoTrack = newStream.getVideoTracks()[0];
+    newVideoTrack.contentHint = 'detail';
 
     // Replace track in peer connection
     const sender = state.peerConnection?.getSenders().find(s => s.track?.kind === 'video');

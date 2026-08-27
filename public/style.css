@@ -1081,8 +1081,10 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
   background: var(--surface);
   transition: opacity .3s;
+  image-rendering: auto;
 }
 
 /* Video calls lock to a phone-shaped 9:16 frame (centered on desktop) */
@@ -1169,6 +1171,7 @@ textarea#message-input:disabled { opacity: .4; cursor: not-allowed; }
   height: 100%;
   object-fit: contain;
   object-position: center center;
+  image-rendering: auto;
 }
 
 .call-overlay.video-mode.front-camera #local-video {
