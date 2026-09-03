@@ -1374,7 +1374,45 @@ async function _hashStr(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ── Lockout state ─────────────────────────────────────────
+const _MAX_ATTEMPTS  = 3;
+const _LOCKOUT_SECS  = 60;
+let   _wrongAttempts = 0;
+let   _lockedUntil   = 0;   // timestamp (ms) when lockout expires
+let   _lockoutTimer  = null;
+
+function _shakeInput() {
+  DOM.searchInput.classList.remove('shake');
+  void DOM.searchInput.offsetWidth; // force reflow to restart animation
+  DOM.searchInput.classList.add('shake');
+}
+
+function _startLockout() {
+  _lockedUntil = Date.now() + _LOCKOUT_SECS * 1000;
+  DOM.searchInput.disabled = true;
+  DOM.searchInput.value    = '';
+
+  clearInterval(_lockoutTimer);
+  _lockoutTimer = setInterval(() => {
+    const remaining = Math.ceil((_lockedUntil - Date.now()) / 1000);
+    if (remaining <= 0) {
+      clearInterval(_lockoutTimer);
+      _lockoutTimer  = null;
+      _wrongAttempts = 0;
+      _lockedUntil   = 0;
+      DOM.searchInput.disabled = false;
+      DOM.searchHint.textContent = '';
+      DOM.searchInput.placeholder = 'Search...';
+    } else {
+      DOM.searchHint.textContent = `🔒 Locked — try again in ${remaining}s`;
+    }
+  }, 1000);
+}
+
 DOM.searchInput.addEventListener('input', async () => {
+  // Block all input during lockout
+  if (Date.now() < _lockedUntil) return;
+
   const val = DOM.searchInput.value;
 
   if (!val.length) { DOM.searchHint.textContent = ''; return; }
@@ -1385,16 +1423,26 @@ DOM.searchInput.addEventListener('input', async () => {
   const hash = await _hashStr(val);
 
   if (hash === _SC_HASH) {
-    // Exact match — open chat
+    // Correct — reset state and open chat
+    _wrongAttempts = 0;
     DOM.searchHint.textContent = '';
     DOM.searchBox.classList.remove('open');
     DOM.searchInput.value = '';
     openChatLogin();
   } else if (val.length < _SC_LEN) {
-    // Show typing progress (length only — no prefix hint that leaks digits)
+    // Still typing — show progress
     DOM.searchHint.textContent = `${val.length}/${_SC_LEN}`;
   } else {
-    DOM.searchHint.textContent = 'not found';
+    // Full-length wrong attempt
+    _wrongAttempts++;
+    _shakeInput();
+    const left = _MAX_ATTEMPTS - _wrongAttempts;
+    if (left <= 0) {
+      _startLockout();
+    } else {
+      DOM.searchHint.textContent = `✗ Wrong — ${left} attempt${left === 1 ? '' : 's'} left`;
+      DOM.searchInput.value = '';
+    }
   }
 });
 
