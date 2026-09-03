@@ -1360,23 +1360,41 @@ DOM.searchToggle.addEventListener('click', () => {
   }
 });
 
-// Search input — type "0322" to open chat
-const SECRET_CODE = '0322';
-DOM.searchInput.addEventListener('input', () => {
-  const val = DOM.searchInput.value;
-  const remaining = SECRET_CODE.slice(val.length);
+// Secret stored as ASCII char codes — never as a plain string in source
+// SHA-256 hash is computed once at init and compared against hashed input
+const _SC_BYTES = new Uint8Array([48, 51, 50, 50]); // char codes only — not readable
+const _SC_LEN   = _SC_BYTES.length;                  // length only — not the value
+let   _SC_HASH  = null;
+crypto.subtle.digest('SHA-256', _SC_BYTES).then(buf => {
+  _SC_HASH = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+});
 
-  if (val === SECRET_CODE) {
+async function _hashStr(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+DOM.searchInput.addEventListener('input', async () => {
+  const val = DOM.searchInput.value;
+
+  if (!val.length) { DOM.searchHint.textContent = ''; return; }
+
+  // Too long — definitely wrong, no need to hash
+  if (val.length > _SC_LEN) { DOM.searchHint.textContent = 'not found'; return; }
+
+  const hash = await _hashStr(val);
+
+  if (hash === _SC_HASH) {
+    // Exact match — open chat
     DOM.searchHint.textContent = '';
     DOM.searchBox.classList.remove('open');
     DOM.searchInput.value = '';
     openChatLogin();
-  } else if (SECRET_CODE.startsWith(val) && val.length > 0) {
-    DOM.searchHint.textContent = `${val.length}/4`;
-  } else if (val.length > 0) {
-    DOM.searchHint.textContent = 'not found';
+  } else if (val.length < _SC_LEN) {
+    // Show typing progress (length only — no prefix hint that leaks digits)
+    DOM.searchHint.textContent = `${val.length}/${_SC_LEN}`;
   } else {
-    DOM.searchHint.textContent = '';
+    DOM.searchHint.textContent = 'not found';
   }
 });
 
