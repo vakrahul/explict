@@ -46,8 +46,27 @@ const STUN = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    // Free public TURN — helps with symmetric NAT (needed for cross-network video)
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
   ],
   iceCandidatePoolSize: 10,
+  iceTransportPolicy: 'all',
 };
 
 /* ── DOM ────────────────────────────────────────────────── */
@@ -291,30 +310,117 @@ function getAudioConstraints() {
 }
 
 function getVideoConstraints() {
+  // Use 'ideal' only — never 'exact' — so browser picks closest match
+  // without throwing OverconstrainedError
   return {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 60 },
+    width:     { ideal: 1280, max: 1920 },
+    height:    { ideal: 720,  max: 1080 },
+    frameRate: { ideal: 30,  max: 60 },
     facingMode: { ideal: state.facingMode }
   };
+}
+
+// Friendly human-readable device error messages
+function friendlyMediaError(err) {
+  if (!err) return 'Unknown media error';
+  switch (err.name) {
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+      return '🔒 Camera/mic permission denied. Please allow access in your browser settings and try again.';
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return '📷 No camera or microphone found. Please connect a device and try again.';
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return '⚠️ Camera or microphone is already in use by another app. Close other apps and try again.';
+    case 'OverconstrainedError':
+    case 'ConstraintNotSatisfiedError':
+      return '⚙️ Your camera does not support the requested settings. Trying fallback...';
+    case 'NotSupportedError':
+      return '🚫 Media not supported. Use HTTPS or localhost, and a modern browser.';
+    case 'AbortError':
+      return '❌ Media access was aborted. Please try again.';
+    default:
+      return `Media error: ${err.message || err.name || err}`;
+  }
+}
+
+// Check if mediaDevices API is available (requires HTTPS or localhost)
+function checkMediaSupport() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isLocal && location.protocol !== 'https:') {
+      UI.toast('🔒 Video calls require HTTPS. Please use a secure connection.', 'error');
+    } else {
+      UI.toast('🚫 Your browser does not support media access. Try Chrome or Firefox.', 'error');
+    }
+    return false;
+  }
+  return true;
+}
+
+// Try getUserMedia with graceful fallback:
+// HD → 720p → 480p → audio-only (for voice) / minimal video (for video)
+async function getUserMediaWithFallback(callType) {
+  if (!checkMediaSupport()) throw new Error('MediaDevices not supported');
+
+  if (callType === 'voice') {
+    // Voice — audio only, no fallback needed
+    return navigator.mediaDevices.getUserMedia({ audio: getAudioConstraints(), video: false });
+  }
+
+  // Video call — try descending quality until one works
+  const videoProfiles = [
+    { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, frameRate: { ideal: 30 }, facingMode: { ideal: state.facingMode } },
+    { width: { ideal: 640 },            height: { ideal: 480 },             frameRate: { ideal: 30 }, facingMode: { ideal: state.facingMode } },
+    { width: { ideal: 320 },            height: { ideal: 240 },             frameRate: { ideal: 15 }, facingMode: { ideal: state.facingMode } },
+    true  // absolute minimal — let browser choose everything
+  ];
+
+  let lastErr;
+  for (const videoConstraint of videoProfiles) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: getAudioConstraints(),
+        video: videoConstraint
+      });
+      return stream;
+    } catch (err) {
+      lastErr = err;
+      // Don't retry on permission or device-not-found errors
+      if (['NotAllowedError', 'PermissionDeniedError', 'NotFoundError', 'DevicesNotFoundError', 'NotSupportedError'].includes(err.name)) {
+        throw err;
+      }
+      // OverconstrainedError / NotReadableError → try lower quality
+      console.warn(`[Media] Retrying with lower constraints (${err.name}):`, err.message);
+    }
+  }
+  throw lastErr;
+}
+
+// Unlock AudioContext on first user gesture (required by browsers)
+function unlockAudioContext() {
+  if (state.audioContext && state.audioContext.state === 'suspended') {
+    state.audioContext.resume().catch(() => {});
+  }
 }
 
 async function applyBestCameraQuality(stream) {
   const track = stream?.getVideoTracks?.()[0];
   if (!track) return;
   track.contentHint = 'detail';
-  const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
-  const width = caps.width?.max ? Math.min(1920, caps.width.max) : 1920;
-  const height = caps.height?.max ? Math.min(1080, caps.height.max) : 1080;
-  const frameRate = caps.frameRate?.max ? Math.min(30, caps.frameRate.max) : 30;
   try {
-    await track.applyConstraints({
-      width: { ideal: width },
-      height: { ideal: height },
-      frameRate: { ideal: frameRate }
-    });
+    const caps = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+    // Use 'ideal' only — never 'exact' — avoids OverconstrainedError
+    const constraints = {};
+    if (caps.width?.max)     constraints.width     = { ideal: Math.min(1280, caps.width.max) };
+    if (caps.height?.max)    constraints.height    = { ideal: Math.min(720,  caps.height.max) };
+    if (caps.frameRate?.max) constraints.frameRate = { ideal: Math.min(30,   caps.frameRate.max) };
+    if (Object.keys(constraints).length > 0) {
+      await track.applyConstraints(constraints);
+    }
   } catch {
-    /* keep the stream getUserMedia already produced */
+    /* keep the stream getUserMedia already produced — not critical */
   }
 }
 
@@ -631,12 +737,12 @@ function toggleEmojiPicker() {
 /* ── CALL FUNCTIONS ─────────────────────────────────────── */
 async function startCall(callType) {
   if (!state.sharedKey) { UI.toast('Encryption not established yet', 'error'); return; }
+  if (!checkMediaSupport()) return;
   state.callType = callType;
+  unlockAudioContext();
   try {
-    state.localStream = await navigator.mediaDevices.getUserMedia({
-      audio: getAudioConstraints(),
-      video: callType === 'video' ? getVideoConstraints() : false
-    });
+    // Use fallback cascade — gracefully handles device errors
+    state.localStream = await getUserMediaWithFallback(callType);
     if (callType === 'video') await applyBestCameraQuality(state.localStream);
     DOM.localVideo.srcObject = state.localStream;
     WebRTC.create();
@@ -647,7 +753,11 @@ async function startCall(callType) {
     UI.showCallOverlay(callType);
   } catch (err) {
     state.callType = null;
-    UI.toast(`Media error: ${err.message}`, 'error');
+    // Stop any partial streams
+    state.localStream?.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+    UI.toast(friendlyMediaError(err), 'error');
+    console.error('[startCall]', err);
   }
 }
 
@@ -673,12 +783,12 @@ async function startScreenShare() {
 
 async function acceptCall(callType) {
   DOM.callModal.classList.add('hidden');
+  if (callType !== 'screen' && !checkMediaSupport()) return;
+  unlockAudioContext();
   try {
     if (callType !== 'screen') {
-      state.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: getAudioConstraints(),
-        video: callType === 'video' ? getVideoConstraints() : false
-      });
+      // Use fallback cascade — gracefully handles device errors
+      state.localStream = await getUserMediaWithFallback(callType);
       if (callType === 'video') await applyBestCameraQuality(state.localStream);
       DOM.localVideo.srcObject = state.localStream;
     }
@@ -690,7 +800,14 @@ async function acceptCall(callType) {
     state.socket.emit('call-accepted', { callType });
     UI.showCallOverlay(callType);
   } catch (err) {
-    UI.toast(`Cannot access media: ${err.message}`, 'error');
+    // Stop any partial streams
+    state.localStream?.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+    state.callType = null;
+    UI.toast(friendlyMediaError(err), 'error');
+    console.error('[acceptCall]', err);
+    // Notify peer that we couldn't answer
+    state.socket?.emit('call-rejected');
   }
 }
 
@@ -969,6 +1086,8 @@ DOM.toggleCamera.addEventListener('click', () => {
 // ── Flip camera (front ↔ back) ──
 DOM.flipCamera.addEventListener('click', async () => {
   if (!state.localStream || state.callType === 'voice') return;
+  if (!checkMediaSupport()) return;
+  const prevFacingMode = state.facingMode;
   state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
 
   try {
@@ -982,6 +1101,7 @@ DOM.flipCamera.addEventListener('click', async () => {
     });
     await applyBestCameraQuality(newStream);
     const newVideoTrack = newStream.getVideoTracks()[0];
+    if (!newVideoTrack) throw new Error('No video track from flipped camera');
     newVideoTrack.contentHint = 'detail';
 
     // Replace track in peer connection
@@ -998,7 +1118,14 @@ DOM.flipCamera.addEventListener('click', async () => {
 
     UI.toast(`Camera: ${state.facingMode === 'user' ? 'Front' : 'Back'}`, 'info');
   } catch (err) {
-    UI.toast('Camera flip failed', 'error');
+    // Revert facing mode if flip failed
+    state.facingMode = prevFacingMode;
+    console.error('[flipCamera]', err);
+    if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      UI.toast('📷 No second camera found on this device', 'error');
+    } else {
+      UI.toast(friendlyMediaError(err), 'error');
+    }
   }
 });
 
